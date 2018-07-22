@@ -1,0 +1,252 @@
+<head>
+  <script src="https://vega.github.io/vega/vega.js"></script>
+</head>
+<body>
+   <div id="view"></div>
+   <script type="text/javascript">
+
+  let my_spec = {
+  "$schema": "https://vega.github.io/schema/vega/v4.json",
+  "padding": 50,
+  "width": 800,
+  "height": 600,
+  "autosize": "none",
+
+  "signals": [
+    { "name": "colorIn", "value": "forestgreen" },
+    {
+      "name": "active", "value": null,
+      "on": [
+        { "events": "text:mouseover", "update": "datum.id" },
+        { "events": "mouseover[!event.item]", "update": "null" }
+      ]
+    }
+  ],
+
+  "data": [
+    {
+      "name": "tree",
+      "values": [
+       ],
+      "transform": [
+        {
+          "type": "stratify",
+          "key": "id",
+          "parentKey": "parent"
+        },
+        {
+          
+          "type": "tree",
+          "method": "tidy",
+          
+          "size": [500, 480],
+          "as": ["y", "x", "depth", "children"]
+
+           }
+      ]
+    },
+    {
+      "name": "leaves",
+      "source": "tree",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "!datum.children"
+        }
+      ]
+    },
+    {
+      "name": "dependencies",
+         "values": [
+         ],
+      "transform": [
+        {
+          "type": "formula",
+          "expr": "treePath('tree', datum.source, datum.target)",
+          "as":   "treepath",
+          "initonly":true
+        }
+      ]
+    },
+    {
+      "name": "selected",
+      "source": "dependencies",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "datum.source === active"
+        }
+      ]
+    }
+  ],
+
+  "marks": [
+    {
+      "type": "text",
+      "from": {"data": "leaves"},
+      "encode": {
+        "enter": {
+          "text": {"field": "name"},
+          "baseline": {"value": "middle"}
+        },
+        "update": {
+          "x": {"field": "x"},
+          "y": {"field": "y"},
+          "fontSize": {"value": 15},
+          "fontWeight": [
+            {"test": "indata('selected', 'source', datum.id)", "value": "bold"},
+            {"test": "indata('selected', 'target', datum.id)", "value": "bold"},
+            {"value": null}
+          ],
+          "fill": [
+            {"test": "datum.id === active", "value": "black"},
+            {"test": "indata('selected', 'source', datum.id)", "signal": "colorIn"},
+            {"test": "indata('selected', 'target', datum.id)", "signal": "colorIn"},
+            {"value": "black"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "group",
+      "from": {
+        "facet": {
+          "name":  "path",
+          "data":  "dependencies",
+          "field": "treepath"
+        }
+      },
+      "marks": [
+        {
+          "type": "line",
+          "interactive": false,
+          "from": {"data": "path"},
+          "encode": {
+            "enter": {
+              "interpolate": {"value": "bundle"},
+              "strokeWidth": {"value": 2.5}
+            },
+            "update": {
+              "stroke": [
+                {"test": "parent.source === active", "signal": "colorIn"},
+                {"test": "parent.target === active", "signal": "colorIn"},
+                {"value": "steelblue"}
+              ],
+              "strokeOpacity": [
+                {"test": "parent.source === active || parent.target === active", "value": 1},
+                {"value": 0.2}
+              ],
+              "tension": {"value": 0.2},
+              "x": {"field": "x"},
+              "y": {"field": "y"}
+            }
+          }
+        }
+      ]
+    }
+  ],
+
+  "scales": [
+    {
+      "name": "color",
+      "type": "ordinal",
+      "range": [{"signal": "colorIn"}, {"signal": "colorIn"}]
+    }
+  ]
+};
+
+ 
+    var view = new
+    vega.View(vega.parse(my_spec))
+    .logLevel(vega.Warn)
+    .renderer('canvas')  // set renderer (canvas or svg)
+    .initialize('#view') // initialize view within parent DOM container
+    .hover()             // enable hover encode set processing
+    .run();
+    
+  let all_operate = [];
+  let all_channel = [];
+
+    let websocket = new WebSocket("ws://localhost:9000/ws/");
+    
+    websocket.addEventListener('message', (event) => {
+      
+      let data = JSON.parse(event.data);
+
+      for (let u in data.updates) {
+        let update = data.updates[u];
+        if (!!update.ChannelMessages) {
+
+        } else if (!!update.Operate) {
+          all_operate.push(update.Operate);
+        } else if (!!update.Channel) {
+          all_channel.push(update.Channel);
+        }
+      }
+
+
+    let inserts = [];
+    let inserts2 = [];
+    let parent_addr = [];
+    let obj = {};
+    let obj2 = {};
+    
+    let equals = function(obj1, obj2){
+      return obj1.id === obj2.id && obj2.from_addr === obj1.from_addr && 
+      obj1.to_addr === obj2.to_addr;
+    }
+
+    let contains = function (arr, obj) {
+      for(let i in arr){
+        if(equals(arr[i], obj)){
+          return true;
+        }
+      }
+      return false;
+    }
+
+  for(let i in all_operate){
+    if(inserts.length === 0){
+        let o = {"id": "0,0", "parent": null, "name": "Root" };
+        inserts.push(o);
+ 
+       o = {"id": "0,4", "parent": "0,0", "name": "Subgraph"};
+        inserts.push(o);
+    }
+
+    if(all_operate[i].addr.length > 2){
+        parent_addr = all_operate[i].addr.slice(0, -1);
+             obj = {"id": all_operate[i].addr.toString(), 
+                     "parent": parent_addr.toString(), 
+                     "name": all_operate[i].name 
+             };         
+          
+    }
+    else if(all_operate[i].addr.length === 2){
+        parent_addr = [0,0];
+             obj = {"id": all_operate[i].addr.toString(), 
+                     "parent": parent_addr.toString(), 
+                     "name": all_operate[i].name
+             };
+        
+    }
+    inserts.push(obj);
+       
+  }
+
+   
+  for (let channel of all_channel) {
+      obj2 = {"source": channel.from_addr.toString(), "target": channel.to_addr.toString()
+      }
+
+      inserts2.push(obj2);
+  }
+
+  
+  
+view.insert('dependencies', inserts2); 
+view.insert('tree', inserts).run();
+
+    });
+ </script>
+</body>
