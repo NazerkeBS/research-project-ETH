@@ -14,6 +14,7 @@
 
   "signals": [
     { "name": "colorIn", "value": "forestgreen" },
+    { "name": "colorOut", "value": "red" },
     {
       "name": "active", "value": null,
       "on": [
@@ -51,7 +52,7 @@
       "transform": [
         {
           "type": "filter",
-          "expr": "!datum.children"
+          "expr": "true"
         }
       ]
     },
@@ -129,7 +130,7 @@
             "update": {
               "stroke": [
                 {"test": "parent.source === active", "signal": "colorIn"},
-                {"test": "parent.target === active", "signal": "colorIn"},
+                {"test": "parent.target === active", "signal": "colorOut"},
                 {"value": "steelblue"}
               ],
               "strokeOpacity": [
@@ -212,6 +213,7 @@
  
        o = {"id": "0,4", "parent": "0,0", "name": "Subgraph"};
         inserts.push(o);
+        inserts.push({ "id": "0,4,0", "parent": "0,4", "name": "empty"});
     }
 
     if(all_operate[i].addr.length > 2){
@@ -231,21 +233,26 @@
         
     }
     inserts.push(obj);
+  
+
        
   }
-
+console.log(inserts);
+    
    
   for (let channel of all_channel) {
       obj2 = {"source": channel.from_addr.toString(), "target": channel.to_addr.toString()
       }
-
       inserts2.push(obj2);
   }
-
+console.log(inserts2);
   
+  if(inserts.length !== 0){
+    view.insert('tree', inserts).run();
+     view.insert('dependencies', inserts2).run(); 
+  }
   
-view.insert('dependencies', inserts2); 
-view.insert('tree', inserts).run();
+ 
 
     });
  </script>
