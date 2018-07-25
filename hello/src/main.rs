@@ -1,32 +1,14 @@
-struct Rectangle {
- x: u32,
- y: u32,
+use std::thread;
+
+fn main(){
+let mut c = vec![];
+
+for i in 0..10{
+c.push(thread::spawn(move || { println!("thread {}", i)}));
 }
 
-struct Circle {
- r : f64,
+for j in c {
+j.join();
 }
-
-trait Shape {
-  fn area(&self) -> u32;
-}
-impl Shape for Rectangle {
-    fn area(&self) -> u32{
-        self.x * self.y
-    }
-}
-
-impl Shape for Circle {
-   fn area(&self) -> u32{
-    (self.r*3.14*self.r) as u32
-   }
-}
-
-
-fn main() {
-    let c = Circle{r: 240.2};
-    let rect = Rectangle{x: 5, y: 40};
-    println!("Circle area: {} \n Rectangle area: {}", c.area(),rect.area());
-
 
 }
