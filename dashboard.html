@@ -97,15 +97,14 @@
       {
         "name": "yscale",
         "type": "band",
-        "domain": {"data": "tree", "field": "addr"},
+        "domain": {"data": "table", "field": "addr"},
         "range": [950,400],
         "padding": 0.05,
-        "round": true,
-        "clamp": true
+        "round": true
       },
       {
         "name": "xscale",
-        "domain": {"data": "tree", "field": "elapsed_ns"},
+        "domain": {"data": "table", "field": "elapsed_ns"},
         "nice": true,
         "range": "width"
       }
@@ -303,19 +302,24 @@
          }
       }
 
+      for(let [id,o] of map_operates){
+        let obj = {
+          "addr": '[' + o.addr.toString() + ']', 
+          "parent": '[' + o.addr.toString().substring(0, o.addr.toString().lastIndexOf(',')) + ']',
+          "elapsed_ns": 0,
+          "name": o.name,
+          "id": id
+        }
+        if(!map_schedule.has(id)){
+          map_schedule.set(id, obj);
+          changeset.insert(obj);
+        }
+      }
+
       for(let [id,list] of map_temp_sch){
         if(list.length == 1){
-          let o = map_operates.get(id);
-          let obj = {
-            "addr": '[' + o.addr.toString() + ']', 
-            "parent": '[' + o.addr.toString().substring(0, o.addr.toString().lastIndexOf(',')) + ']',
-            "elapsed_ns": list[0].event.Schedule.elapsed_ns,
-            "name": o.name,
-            "id": list[0].event.Schedule.operate_id
-          };     
-          console.log(o);   
           if(list[0].delta == 1){    
-            changeset.insert(obj);
+            changeset.modify((x) => x.id == list[0].event.Schedule.operate_id, "elapsed_ns", list[0].event.Schedule.elapsed_ns);
             map_schedule.set(id, list[0].event.Schedule);          
           }else {
             map_schedule.delete(id);
