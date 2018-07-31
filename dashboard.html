@@ -7,8 +7,32 @@
     
 <button id="back">back</button>
 
-<div id="view"></div>
-<div id="view-rhs"></div>
+  <div id="view"></div>
+  <div id="view-rhs">
+    <h2 class="details"> Description </h2>
+      <ul>
+        <li>
+            <span class="from_addr">from_addr: </span>
+            <span class="from_addr_update"></span>
+        </li>
+        <li>
+            <span class="from_port">from_port: </span>
+            <span class="from_port_update"></span>
+        </li>
+        <li>
+            <span class="to_addr">to_addr: </span>
+            <span class="to_addr_update"></span>
+        </li>
+        <li>
+            <span class="to_port">to_port: </span>
+            <span class="to_port_update"></span>
+        </li>
+        <li>
+            <span class="total_count">total_count: </span>
+            <span class="total_count_update"></span>
+        </li>
+      </ul>
+  </div>
 </div>
 
 <style>
@@ -36,7 +60,7 @@
   }
   #view-rhs{
     float:right;
-    padding-right: 10px;
+    padding-right: 500px;
   } 
 </style>
 
@@ -103,6 +127,9 @@
         "name": "maxx",
         "on": [{"events": "arc:click", "update": "datum.start + datum.end"}
         ]
+      },
+      {
+        "name": "data"
       }
     ],
     "scales": [
@@ -239,6 +266,8 @@
     .initialize('#view') // initialize view within parent DOM container
     .hover()             // enable hover encode set processing
     .run();
+    
+
 
      view.insert('tree', {"addr": "[0,0]", "parent": null, "name": "Dataflow", "elapsed_ns": 0}).run();
      
@@ -259,6 +288,9 @@
         let cur = view.signal('filterlist');
         view.signal('filterlist', cur.substring(0, cur.lastIndexOf(',')) + "]");
       };
+      
+      
+      //document.querySelector('#view-rhs .title').innerHTML = view.signal('filterlist');
 
       let map_temp_ops = new Map();
       let map_temp_chs = new Map();
@@ -389,24 +421,26 @@
         }
       }
 
+      for(let [id,o] of map_channels){
+        let addr = '[' + o.from_addr.toString() + ']';
+        if(addr == view.signal('filterlist')){
+          document.querySelector('#view-rhs li .from_addr_update').innerHTML = addr;
+          document.querySelector('#view-rhs li .from_port_update').innerHTML = o.from_port;
+          document.querySelector('#view-rhs li .to_addr_update').innerHTML = '[' + o.to_addr.toString() + ']';
+          document.querySelector('#view-rhs li .to_port_update').innerHTML = o.to_port;
+          let total_cnt = map_messages.get(id).total_count;
+          document.querySelector('#view-rhs li .total_count_update').innerHTML = total_cnt; 
 
-          /*
-
-                      let obj = {"id": update.event.Channel.id,
-                     "from_addr": update.event.Channel.from_addr.toString(),
-                     "from_port": update.event.Channel.from_port,
-                     "to_addr": update.event.Channel.to_addr.toString(),
-                     "to_port": update.event.Channel.to_port,
-                     "delta": update.delta
-                    };
-
-                    };
-            */
+        }
+      }
       
-      
+      view.change('tree', changeset).run();
 
-      view.change('tree', changeset).run(); 
+      
+    
     });
+      
+
 
 </script>
 </body>
