@@ -65,8 +65,8 @@
             "type": "partition",
             "field": "elapsed_ns",
             "sort": {"field": "value"},
-            "size": [{"signal": " 2 * PI"}, {"signal": "width / 2.5"}],
-            "as": ["a0", "r0", "a1", "r1", "depth", "chidlren"]
+            "size": [1,1],
+            "as": ["start", "inner", "end", "outer", "depth", "children"]
           }
         ]
       },
@@ -85,21 +85,53 @@
       {
         "name": "filterlist",
         "value": "[0,0]",
-        "on": [{"events": "click", "update": "invert('yscale', y())"}]
+        "on": [{"events": "rect:click", "update": "invert('yscale', y())"}]
+      },
+      {
+        "name": "miny",
+        "value": 0,
+        "on": [{"events": "arc:click", "update": "datum.inner"}
+        ]
+      },
+      {
+        "name": "minx",
+        "value": 0,
+        "on": [{"events": "arc:click", "update": "datum.start"}
+        ]
+      },
+      {
+        "name": "maxx",
+        "on": [{"events": "arc:click", "update": "datum.start + datum.end"}
+        ]
       }
     ],
     "scales": [
       {
         "name": "color",
         "type": "ordinal",
-        "range": {"scheme": "tableau20"}
+        "range": {"scheme": "accent"}
+      },
+      {
+        "name": "x",
+        "type": "linear",
+        "domain": [0,1],
+        "domainMin": {"signal": "minx"},
+        "domainMax": {"signal": "maxx"},
+        "range": [0, {"signal": "2 * PI"}]
+      },
+      {
+        "name": "y",
+        "type": "sqrt",
+        "domain": [0, 1],
+        "domainMin": {"signal": "miny"},
+        "range": [{"signal": "miny != 0 ? 20 : 0"}, {"signal": "(min(width, height )/2.5) - 10"}]
       },   
       {
         "name": "yscale",
         "type": "band",
         "domain": {"data": "table", "field": "addr"},
         "range": [950,400],
-        "padding": 0.05,
+        "padding": 0.03,
         "round": true
       },
       {
@@ -135,24 +167,25 @@
           "enter": {
             "x": {"signal": "width / 4"},
             "y": {"signal": "height / 6"},
-            "fill": {"scale": "color", "field": "depth"},
-            "tooltip": {"signal": "datum.addr + (datum.elapsed_ns? ', ' + datum.elapsed_ns + ' ns' : '')"}
+            "fill": {"scale": "color", "field": "depth"}
           },
           "update": {
             "x": {"signal": "width / 4"},
             "y": {"signal": "height / 6"},
-            "startAngle": {"field": "a0"},
-            "endAngle": {"field": "a1"},
-            "innerRadius": {"field": "r0"},
-            "outerRadius": {"field": "r1"},
+            "startAngle": {"signal": "max(0, min(2*PI, scale('x', datum.start)))"},
+            "endAngle": {"signal": "max(0, min(2*PI, scale('x', datum.start + datum.end)))"},
+            "innerRadius": { "signal": "max(0, scale('y', datum.inner))"},
+            "outerRadius": {"scale": "y", "field": "outer"},
             "stroke": {"value": "white"},
             "strokeWidth": {"value": 0.5},
             "zindex": {"value": 0},
-            "tooltip": {"signal": "'name: ' + datum.name  + '' + ' addr: ' + datum.addr + ' time: ' + datum.elapsed_ns + ' ns'"}
+            "tooltip": {
+              "signal": "{\"addr\":datum['addr'] + '', \"name\": datum['name'], \"elapsed\": datum['elapsed_ns'] + 'ns' }"
+            }
           },
           "hover": {
-            "stroke": {"value": "red"},
-            "strokeWidth": {"value": 2},
+            "stroke": {"value": "white"},
+            "strokeWidth": {"value": 1},
             "zindex": {"value": 1}
           }
         }
@@ -377,4 +410,3 @@
 
 </script>
 </body>
-
