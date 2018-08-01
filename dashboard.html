@@ -9,29 +9,39 @@
 
   <div id="view"></div>
   <div id="view-rhs">
-    <h2 class="details"> Description </h2>
-      <ul>
-        <li>
+    <div id="details-list">
+      <h2 class="title"> Description </h2>
+        <ul>
+          <li>
+            <span class="name">operate name: </span>
+            <span class="operate_name_update"></span>
+          </li>
+          <li>
             <span class="from_addr">from_addr: </span>
             <span class="from_addr_update"></span>
-        </li>
-        <li>
+          </li>
+          <li>
             <span class="from_port">from_port: </span>
             <span class="from_port_update"></span>
-        </li>
-        <li>
+          </li>
+          <li>
             <span class="to_addr">to_addr: </span>
             <span class="to_addr_update"></span>
-        </li>
-        <li>
+          </li>
+          <li>
             <span class="to_port">to_port: </span>
             <span class="to_port_update"></span>
-        </li>
-        <li>
+          </li>
+          <li>
+            <span class="elapsed">elapsed_ns: </span>
+            <span class="elapsed_ns_update"></span>
+          </li>
+          <li>
             <span class="total_count">total_count: </span>
             <span class="total_count_update"></span>
-        </li>
-      </ul>
+          </li>
+        </ul>
+    </div>
   </div>
 </div>
 
@@ -61,7 +71,27 @@
   #view-rhs{
     float:right;
     padding-right: 500px;
-  } 
+  }
+  #details-list{
+    margin: 30px;
+  }
+  #details-list ul{
+    list-style-type: none;
+    padding: 0;
+  }
+  #details-list li{
+    padding: 10px;
+    border-left: 10px solid #ddd;
+    margin: 10px 10px;
+    font-size: 20px;
+  }
+  .operate_name_update, .from_addr_update,.from_port_update, .to_addr_update, .to_port_update, .elapsed_ns_update, .total_count_update{
+    float: right;
+    padding-left: 5px;
+    padding-right: 10px;
+    
+  }
+
 </style>
 
 <script type="text/javascript">
@@ -108,7 +138,7 @@
     "signals": [
       {
         "name": "filterlist",
-        "value": "[0,0]",
+        "value": '[0,0]',
         "on": [{"events": "rect:click", "update": "invert('yscale', y())"}]
       },
       {
@@ -129,7 +159,16 @@
         ]
       },
       {
-        "name": "data"
+        "name": "sunburst_data",
+        "value": "datum",
+        "on": [{"events": "arc:click", "update": "datum"}
+        ] 
+      },     
+      {
+        "name": "rect_data",
+        "value": "datum",
+        "on": [{"events": "rect:click", "update": "datum"}
+        ] 
       }
     ],
     "scales": [
@@ -291,6 +330,7 @@
       
       
       //document.querySelector('#view-rhs .title').innerHTML = view.signal('filterlist');
+      
 
       let map_temp_ops = new Map();
       let map_temp_chs = new Map();
@@ -420,14 +460,26 @@
           console.error("More than 2 updates");
         }
       }
-
+      
       for(let [id,o] of map_channels){
         let addr = '[' + o.from_addr.toString() + ']';
-        if(addr == view.signal('filterlist')){
+        if(addr == view.signal('rect_data').addr){
+          document.querySelector('#view-rhs li .operate_name_update').innerHTML = view.signal('rect_data').name;
           document.querySelector('#view-rhs li .from_addr_update').innerHTML = addr;
           document.querySelector('#view-rhs li .from_port_update').innerHTML = o.from_port;
           document.querySelector('#view-rhs li .to_addr_update').innerHTML = '[' + o.to_addr.toString() + ']';
           document.querySelector('#view-rhs li .to_port_update').innerHTML = o.to_port;
+          document.querySelector('#view-rhs li .elapsed_ns_update').innerHTML = view.signal('rect_data').elapsed_ns;
+          let total_cnt = map_messages.get(id).total_count;
+          document.querySelector('#view-rhs li .total_count_update').innerHTML = total_cnt; 
+        }
+        else if(addr == view.signal('sunburst_data').addr){
+          document.querySelector('#view-rhs li .operate_name_update').innerHTML = view.signal('sunburst_data').name;
+          document.querySelector('#view-rhs li .from_addr_update').innerHTML = addr;
+          document.querySelector('#view-rhs li .from_port_update').innerHTML = o.from_port;
+          document.querySelector('#view-rhs li .to_addr_update').innerHTML = '[' + o.to_addr.toString() + ']';
+          document.querySelector('#view-rhs li .to_port_update').innerHTML = o.to_port;
+          document.querySelector('#view-rhs li .elapsed_ns_update').innerHTML = view.signal('sunburst_data').elapsed_ns;
           let total_cnt = map_messages.get(id).total_count;
           document.querySelector('#view-rhs li .total_count_update').innerHTML = total_cnt; 
 
