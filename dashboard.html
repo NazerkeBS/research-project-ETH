@@ -138,7 +138,7 @@
     "signals": [
       {
         "name": "filterlist",
-        "value": '[0,0]',
+        "value": "[0,0]",
         "on": [{"events": "rect:click", "update": "invert('yscale', y())"}]
       },
       {
@@ -307,13 +307,21 @@
     .run();
     
 
-
-     view.insert('tree', {"addr": "[0,0]", "parent": null, "name": "Dataflow", "elapsed_ns": 0}).run();
+    view.insert('tree', {"addr": "[0,0]", "parent": null, "name": "Dataflow", "elapsed_ns": 0}).run();
      
     let map_operates = new Map();
     let map_channels = new Map();
     let map_schedule = new Map();
     let map_messages = new Map();
+
+    view.addSignalListener('sunburst_data', function (name, value){
+      view.runAfter(function (view) {view.signal('filterlist', value.parent); view.run();});
+    });
+
+    back_button.onclick = () => {
+      let cur = view.signal('filterlist');
+      view.signal('filterlist', cur.substring(0, cur.lastIndexOf(',')) + "]");
+    };
 
     let websocket = new WebSocket("ws://localhost:9000/ws/");
     websocket.addEventListener('message', (ev) => {
@@ -323,14 +331,6 @@
       let changeset = vega.changeset();
       let changeset_msgs = vega.changeset();
 
-      back_button.onclick = () => {
-        let cur = view.signal('filterlist');
-        view.signal('filterlist', cur.substring(0, cur.lastIndexOf(',')) + "]");
-      };
-      
-      
-      //document.querySelector('#view-rhs .title').innerHTML = view.signal('filterlist');
-      
 
       let map_temp_ops = new Map();
       let map_temp_chs = new Map();
@@ -486,9 +486,7 @@
         }
       }
       
-      view.change('tree', changeset).run();
-
-      
+      view.change('tree', changeset).run();      
     
     });
       
