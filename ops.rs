@@ -2,79 +2,39 @@ extern crate timely;
 
 use std::collections::HashMap;
 
-
+use timely::Data;
 use timely::dataflow::{Stream,Scope};
-use timely::dataflow::operators::{Inspect, ToStream};
-use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::operators::{Inspect, ToStream, Delay};
 use timely::dataflow::channels::pact::Pipeline;
+use timely::dataflow::operators::Operator;
+use timely::progress::timestamp::RootTimestamp;
 
 trait Aggregate {
-	fn sum(&self) -> Self;
 	fn max(&self) -> Self;
 	fn min(&self) -> Self;
-	fn mode(&self) -> Self;
+	fn product(&self) -> Self;
 }
 
-impl <S: Scope> Aggregate for Stream<S, u64>{
-	
-	fn sum(&self) -> Stream<S, u64>{
-		self.unary(Pipeline, "sum", |_default_cap, _info|{
-			move |input, output|{
-				while let Some((time,data)) = input.next() {
-					//a single timestamp
-					let mut session = output.session(&time);
-					let mut sum = 0;
-					for d in data.iter(){
-						sum += d;
-					}
-					session.give(sum);
-				}	
-			}
-		})
-	}
+trait Sum{
+	fn sum(&self) -> Self;
+}
 
-	fn max(&self) -> Stream<S,u64> {
-		self.unary(Pipeline, "maximum", |_default_cap, _info|{
-			move |input, output|{
-				while let Some((time, data)) = input.next(){
-					let mut session = output.session(&time);
-					let mut largest = data[0];
-					for d in data.iter(){
-						if d > &largest {
-							largest = *d;
-						} 
-					}
-					session.give(largest);
-				}
-			}
-		})
-	}
+trait Mode<S: Scope> {
+	fn mode(&self) -> Stream <S,(u64, u64)>;
+}
 
-	fn min(&self) -> Stream<S,u64>{
-		self.unary(Pipeline, "minimum", |_default_cap, _info|{
-			move |input, output|{
-				while let Some((time, data)) = input.next(){
-					let mut session = output.session(&time);
-					let mut smallest = data[0];
-					for d in data.iter(){
-						if &smallest > d {
-							smallest = *d;
-						}
-					}
-					session.give(smallest);
-				}
-			}
-		})
-	}
-	
-	fn mode(&self) -> Stream<S,(u64)>{
-		self.unary(Pipeline, "mode", |_default_cap, _info|{
-			move |input,output|{
+trait Average <S: Scope>{
+  	fn avg (&self) -> Stream<S, f64>;
+}
+
+impl <S: Scope> Mode<S> for Stream<S, u64>{
+	fn mode(&self) -> Stream <S,(u64, u64)>{
+		self.unary(Pipeline, "Mode", |_cap, _info| move |input, output|{		
 				while let Some((time,data)) = input.next(){
 					let mut session = output.session(&time);
 					let mut map = HashMap::new();
-					for d in data.iter(){
-						let count = map.entry(d).or_insert(0);
+					for datum in data.iter(){
+						let count = map.entry(datum).or_insert(0);
 						*count += 1;
 					}
                     
@@ -86,35 +46,96 @@ impl <S: Scope> Aggregate for Stream<S, u64>{
 							value = v;
 						}
 					}
-					session.give(value);
-
+					let tuple = (value, max_cnt);
+					session.give(tuple);
 				}
-			}
+			
+		})
+	}	
+}
+
+impl <S : Scope> Sum for Stream<S, u64>{
+	fn sum(&self) -> Stream<S, u64> {
+        let mut stash = HashMap::new();
+        self.unary_notify(Pipeline, "Sum", vec![], move |input, output, notificator|{
+            input.for_each(|time, data|{
+                let sum = stash.entry(time.time().clone()).or_insert(0);
+                    for datum in data.iter() {
+                        *sum += datum;
+                    }
+                    notificator.notify_at(time.delayed(&time));
+            });
+            notificator.for_each(|time,_,_| {
+                if let Some(sum) = stash.remove(&time) {
+                    output.session(&time).give(sum);
+                }
+            });
+        })
+    }
+}
+
+
+impl <S: Scope> Aggregate for Stream<S, u64>{
+	fn max(&self) -> Stream<S,u64> {
+		self.unary(Pipeline, "Maximum", |_cap, _info| move |input, output|{
+				while let Some((time, data)) = input.next(){
+					let mut session = output.session(&time);
+					let mut largest = data[0];
+					for d in data.iter(){
+						if d > &largest {
+							largest = *d;
+						} 
+					}
+					session.give(largest);
+				}			
 		})
 	}
 
-}
-
-trait Average {
-  	fn avg(&self) -> Self;
-}
-
-impl <S: Scope> Average for Stream<S, u64>{
-	fn avg(&self) -> Stream <S, u64> {
-		self.unary(Pipeline, "average", |_default_cap, _info|{
-			move |input, output| {
-				while let Some((time,data)) = input.next(){
+	fn min(&self) -> Stream<S,u64>{
+		self.unary(Pipeline, "Minimum", |_cap, _info| move |input, output|{
+				while let Some((time, data)) = input.next(){
 					let mut session = output.session(&time);
-					let mut sum = 0;
-					let mut cnt  = 0;
+					let mut smallest = data[0];
 					for d in data.iter(){
-						sum += d;
-						cnt += 1;
+						if &smallest > d {
+							smallest = *d;
+						}
 					}
-
-					session.give(sum/ cnt);
+					session.give(smallest);
 				}
-			}
+			
+		})
+	}
+
+	fn product(&self) -> Stream <S, u64>{
+		self.unary(Pipeline, "Product", |_cap, _info| move |input, output|{
+			input.for_each(|time,data|{
+				let mut prod = 1;
+				for datum in data.iter(){
+					prod *= datum;	
+				}
+				output.session(&time).give(prod);
+			});
+		})
+	}	
+
+}
+
+
+impl <S: Scope> Average <S> for Stream <S, u64>{
+	fn avg (&self) -> Stream<S, f64> {
+		self.unary(Pipeline, "Average", |_cap, _info| move |input, output|{
+			input.for_each(|time, data|{
+				let mut sum = 0;
+				let mut cnt = 0;
+				for datum in data.iter(){
+					sum += datum;
+					cnt += 1;
+				}
+				let avg = (sum as f64) / (cnt as f64);		
+				output.session(&time).give(avg);
+			});		 
+		
 		})
 	}
 }
@@ -123,7 +144,8 @@ fn main(){
 
 	//sum up the stream of integers
 	timely::example(|scope|{
-		(0u64..10).to_stream(scope)
+		(0u64..100).to_stream(scope)
+		.delay(|x,t| RootTimestamp::new(*x /10))
 		.sum()
 		.inspect_batch(|t,x| println!("time ={:?} sum ={:?}", t, x));
 	});
@@ -156,5 +178,12 @@ fn main(){
  				.avg()
  				.inspect(|x| println!("avg = {:?}", x));
  	});
+
+ 	//product
+ 	timely::example(|scope|{
+		(1..10).to_stream(scope)
+			   .product()
+			   .inspect(|x| println!("{:?}", x));
+	});
 
 }
