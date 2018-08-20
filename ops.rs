@@ -23,14 +23,13 @@ trait TakeWhile <D: Data>{
 	fn take_while <L: Fn(&D) -> bool + 'static> (&self, predicate: L) -> Self;
 }
 
-trait Sum<S: Scope, T> where T: Add<Output=T> + Copy + Clone + Default {
+trait Sum<S: Scope, T> where T: Add<Output=T> + Copy + Clone {
 	fn sum(&self) -> Stream<S,T>;
 }
 
 trait Product<S: Scope, T> where T: Mul<Output=T> + Copy + Clone  {
 	fn product(&self) -> Stream<S,T>;
 }
-
 
 trait Mode<S: Scope, T: Data> where T: Eq + Hash{
 	fn mode(&self) -> Stream <S,(T, u64)>;
@@ -44,8 +43,7 @@ impl <S: Scope, T: Data> Mode<S, T> for Stream<S, T> where T: Eq + Hash{
 	fn mode(&self) -> Stream <S,(T, u64)>{
 		self.unary(Pipeline, "Mode", |_cap, _info| {
 
-			let mut map = HashMap::new();
-
+		    let mut map = HashMap::new();
 			move |input, output|{		
 				while let Some((time,data)) = input.next(){
 					let mut session = output.session(&time);
@@ -80,32 +78,34 @@ impl <S: Scope, T: Data> Mode<S, T> for Stream<S, T> where T: Eq + Hash{
 	}	
 }
 
-impl <S: Scope, T: Data> Sum<S, T> for Stream<S, T> where T: Add<Output=T> + Copy + Clone + Default{
+impl <S: Scope, T: Data> Sum<S, T> for Stream<S, T> where T: Add<Output=T> + Copy + Clone{
     fn sum(&self) -> Stream<S,T>{
-        let mut stash = HashMap::new();
-        self.unary_notify(Pipeline, "Sum", vec![], move |input, output, notificator|{
-            input.for_each(|time, data|{
-                let sum = stash.entry(time.time().clone()).or_insert(Default::default());
-                    for datum in data.iter() {
-                        *sum = *sum + *datum;
-                    }
-                notificator.notify_at(time.delayed(&time));        
-            });
-
-            notificator.for_each(|time,_,_| {
-                if let Some(sum) = stash.remove(&time) {
-                    output.session(&time).give(sum);
-                }
-            });
-        })
+    	let mut sum : Option<T> = None;
+		self.unary(Pipeline, "Sum", |_cap, _info| 
+			move |input, output|{
+			input.for_each(|time,data|{
+				for datum in data.iter(){
+					if let Some(x) = sum {
+						sum = Some(x + (*datum));
+					}
+					else {
+						sum = Some(*datum);
+					} 	
+				}
+				if let Some(x) = sum {
+					output.session(&time).give(x);
+				}
+			});
+		})
     }
 }
 
 impl <S: Scope, T: Data> Product<S, T> for Stream<S, T> where T: Mul<Output=T> + Copy + Clone {
 	fn product(&self) -> Stream<S,T>{
+		let mut prod : Option<T> = None;
+
 		self.unary(Pipeline, "Product", |_cap, _info| move |input, output|{
 			input.for_each(|time,data|{
-				let mut prod : Option<T> = None;
 				for datum in data.iter(){
 					if let Some(x) = prod {
 						prod = Some(x * (*datum));
@@ -121,7 +121,6 @@ impl <S: Scope, T: Data> Product<S, T> for Stream<S, T> where T: Mul<Output=T> +
 		})
 	}
 }
-
 
 impl <S: Scope, D: Data> TakeWhile<D> for Stream<S, D>{
 	fn take_while<L: Fn(&D) -> bool + 'static> (&self, predicate: L) -> Stream<S, D>{
@@ -234,9 +233,9 @@ fn main(){
 
  	//product
  	timely::example(|scope|{
-		(1..10).to_stream(scope)
-			   //.product()
-			   .inspect(|x| println!("{:?}", x));
+		(1..6).to_stream(scope)
+			   .product()
+			   .inspect(|x| println!("product = {:?}", x));
 	});
 
 	//take until predicate holds
@@ -245,8 +244,6 @@ fn main(){
 			.take_while(|x| x < &4)
 			.inspect(|x| println!("{:?}", x));
 	});
-
-
 
 	// initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
@@ -265,7 +262,7 @@ fn main(){
         let timer = std::time::Instant::now();
 
         // introduce data and watch!
-        let v = vec![1,2,2,2,3,4,4];
+        let v = vec![1,2,2,2,3,5,5];
         for (_round, value) in v.into_iter().enumerate() {
             if index == 0 {
                 input.send(value);
@@ -280,5 +277,28 @@ fn main(){
             }
         }
     }).unwrap();
+
+    timely::execute_from_args(std::env::args(), |worker|{
+    	let index = worker.index();
+    	let mut input = InputHandle::new();
+
+    	let probe = worker.dataflow(|scope|
+    		scope.input_from(&mut input)
+    			 .sum()
+    			 .inspect_batch(move |t, xs| println!("worker: {:?} computation: {:?} time: {:?}",index, xs, t))
+    			 .probe()
+	    ) ;
+		let v = vec![1,2,3,4,5];
+	    for (round, value) in v.into_iter().enumerate() {
+		    if index == 0 {
+		    	input.send(value);
+		    }    	
+	    	input.advance_to(round + 1);
+            while probe.less_than(input.time()) {
+                worker.step();
+            }
+	    }
+    }).unwrap();
+
 
 }
